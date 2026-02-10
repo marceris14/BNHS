@@ -36,14 +36,15 @@
         <div id="reader"></div>
         <div id="scanResult" style="display:none;" class="result-box">
             <p style="margin:0; color:#666; font-size:11px;">STUDENT IDENTIFIED:</p>
-            <p style="font-size: 16px; font-weight: bold; margin: 5px 0;"><span id="nameText"></span></p>
-            <p style="margin: 0 0 10px 0; font-size:13px; color: #444;"><span id="infoText"></span></p>
+            <p style="font-size: 18px; font-weight: bold; margin: 5px 0; color: #000;"><span id="nameText"></span></p>
+            <p style="margin: 0 0 15px 0; font-size:14px; color: #444; font-weight: 500;"><span id="infoText"></span></p>
+            
             <label style="font-size: 12px; font-weight: bold;">Violation:</label>
             <select id="violationType">
-                <option value="Haircut">Proper Haircut</option>
+                <option value="Haircut">Improper Haircut</option>
                 <option value="Uniform">Incomplete Uniform</option>
                 <option value="ID">No ID Card</option>
-                <option value="Lateness">Lateness</option>
+                <option value="Lateness">Tardiness</option>
                 <option value="Other">Other</option>
             </select>
             <button class="btn-success" onclick="saveRecord()">Confirm & Save</button>
@@ -59,7 +60,7 @@
                     <tr>
                         <th>Name</th>
                         <th>Sec</th>
-                        <th>Vio</th>
+                        <th>Violation</th>
                         <th>Time</th>
                     </tr>
                 </thead>
@@ -134,13 +135,15 @@
             if (student) {
                 playSound('success');
                 activeStudent = student;
+                // CLEAN DISPLAY LOGIC:
                 document.getElementById('nameText').innerText = student.Name;
-                document.getElementById('infoText').innerText = `Grade ${student.Grade} - Section ${student.Section}`;
+                document.getElementById('infoText').innerText = `Grade ${student.Grade} — Section ${student.Section}`;
+                
                 document.getElementById('scanResult').style.display = 'block';
                 if(scanner) scanner.pause(true);
             } else {
                 playSound('error');
-                alert("LRN Not Found!");
+                alert("LRN Not Found in Roster!");
             }
         }
 
@@ -151,7 +154,11 @@
 
         async function saveRecord() {
             if(!activeStudent) return;
-            await db.logs.add({ ...activeStudent, violation: document.getElementById('violationType').value, date: new Date().toLocaleString() });
+            await db.logs.add({ 
+                ...activeStudent, 
+                violation: document.getElementById('violationType').value, 
+                date: new Date().toLocaleString() 
+            });
             playSound('success');
             document.getElementById('scanResult').style.display = 'none';
             await refreshUI();
@@ -166,25 +173,33 @@
                 const rows = e.target.result.split("\n").slice(1);
                 const data = rows.map(r => {
                     const c = r.split(",");
-                    return c.length >= 4 ? { LRN: c[0].trim(), Name: c[1].trim(), Grade: c[2].trim(), Section: c[3].trim() } : null;
+                    // This ensures we only take the 4 columns we need
+                    return c.length >= 4 ? { 
+                        LRN: c[0].trim(), 
+                        Name: c[1].trim(), 
+                        Grade: c[2].trim(), 
+                        Section: c[3].trim() 
+                    } : null;
                 }).filter(Boolean);
+                await db.students.clear();
                 await db.students.bulkPut(data);
                 await refreshUI();
+                alert("Roster Updated!");
             };
             reader.readAsText(file);
         }
 
         async function exportData() {
             const logs = await db.logs.toArray();
-            if (logs.length === 0) return alert("No data");
+            if (logs.length === 0) return alert("No data to export.");
             const ws = XLSX.utils.json_to_sheet(logs);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Report");
             XLSX.writeFile(wb, "Student_Violations.xlsx");
         }
 
-        async function clearLogs() { if (confirm("Clear logs?")) { await db.logs.clear(); refreshUI(); } }
-        async function clearRoster() { if (confirm("Delete roster?")) { await db.students.clear(); refreshUI(); } }
+        async function clearLogs() { if (confirm("Clear all logs?")) { await db.logs.clear(); refreshUI(); } }
+        async function clearRoster() { if (confirm("Delete student roster?")) { await db.students.clear(); refreshUI(); } }
     </script>
 </body>
 </html>
