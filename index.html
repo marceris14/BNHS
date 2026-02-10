@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Tracker</title>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 15px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        button { width: 100%; background: #007bff; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin: 8px 0; font-size: 16px; }
+        button.secondary { background: #6c757d; }
+        button.export { background: #28a745; }
+        button.reset { background: #dc3545; }
+        #reader { width: 100%; border-radius: 12px; background: #000; }
+        .result-box { background: #e9ecef; padding: 15px; border-radius: 8px; margin-top: 10px; }
+        input[type="file"] { margin: 10px 0; display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h3>1. Setup</h3>
+        <input type="file" id="csvFile" accept=".csv">
+        <button class="secondary" onclick="uploadCSV()">Upload Student Roster</button>
+        <div id="status" style="font-size: 12px; color: green;"></div>
+    </div>
+
+    <div class="card">
+        <h3>2. Scanner</h3>
+        <button id="startBtn" onclick="initScanner()">Open Camera</button>
+        <div id="reader"></div>
+        
+        <div id="scanResult" style="display:none;" class="result-box">
+            <p><strong>Student:</strong> <span id="nameText"></span></p>
+            <p><strong>Info:</strong> <span id="infoText"></span></p>
+            <select id="violationType" style="width:100%; padding:10px; margin-bottom:10px;">
+                <option value="Haircut">Proper Haircut</option>
+                <option value="Uniform">Incomplete Uniform</option>
+                <option value="ID">No ID</option>
+                <option value="Lateness">Lateness</option>
+            </select>
+            <button onclick="saveRecord()">Save Violation</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>3. Data Management</h3>
+        <button class="export" onclick="exportData()">Extract Report (Excel)</button>
+        <button class="reset" onclick="clearLogs()">Clear All Violations</button>
+    </div>
+
+    <script>
+        const db = new Dexie("StudentDB");
+        db.version(1).stores({
+            students: "LRN, Name, Grade, Section",
+            logs: "++id, LRN, Name, Grade, Section, violation, date"
+        });
+
+        let scanner = null;
+        let activeStudent = null;
+
+        // --- CAMERA LOGIC ---
+        function initScanner() {
+            document.getElementById('startBtn').style.display = 'none';
+            scanner = new Html5Qrcode("reader");
+            scanner.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: 250 },
+                onScanSuccess
+            ).catch(err => alert("Camera error: Use HTTPS or check permissions."));
+        }
+
+        async function onScanSuccess(decodedText) {
+            const student = await db.students.get(decodedText.trim());
+            if (student) {
+                activeStudent = student;
+                document.getElementById('nameText').innerText = student.Name;
+                document.getElementById('infoText').innerText = `G${student.Grade} - ${student.Section}`;
+                document.getElementById('scanResult').style.display = 'block';
+                if(scanner) scanner.pause(true);
+            }
+        }
+
+        // --- STORAGE LOGIC ---
+        async function uploadCSV() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) return alert("Select a file!");
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const rows = e.target.result.split("\n").slice(1);
+                const data = rows.map(r => {
+                    const [lrn, name, grade, section] = r.split(",");
+                    return lrn ? { LRN: lrn.trim(), Name: name.trim(), Grade: grade.trim(), Section: section.trim() } : null;
+                }).filter(Boolean);
+                await db.students.bulkPut(data);
+                document.getElementById('status').innerText = `Loaded ${data.length} students.`;
+            };
+            reader.readAsText(file);
+        }
+
+        async function saveRecord() {
+            const vio = document.getElementById('violationType').value;
+            await db.logs.add({
+                ...activeStudent,
+                violation: vio,
+                date: new Date().toLocaleString()
+            });
+            alert("Saved!");
+            document.getElementById('scanResult').style.display = 'none';
+            scanner.resume();
+        }
+
+        async function exportData() {
+            const logs = await db.logs.toArray();
+            if (logs.length === 0) return alert("No violations recorded.");
+            const ws = XLSX.utils.json_to_sheet(logs);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Violations");
+            XLSX.writeFile(wb, "Violation_Report.xlsx");
+        }
+
+        async function clearLogs() {
+            if (confirm("Delete all violation logs? Student list will remain.")) {
+                await db.logs.clear();
+                alert("Database reset.");
+            }
+        }
+    </script>
+</body>
+</html>
