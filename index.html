@@ -8,32 +8,22 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 10px; background: #f0f2f5; color: #333; }
+        body { font-family: -apple-system, sans-serif; margin: 10px; background: #f0f2f5; color: #333; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
         h3 { margin-top: 0; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 8px; color: #0056b3; }
-        
-        /* Buttons */
-        button { width: 100%; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin: 5px 0; font-size: 14px; cursor: pointer; transition: 0.2s; }
-        button:active { opacity: 0.7; transform: scale(0.98); }
+        button { width: 100%; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin: 5px 0; font-size: 14px; cursor: pointer; }
         .btn-primary { background: #007bff; color: white; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn-success { background: #28a745; color: white; }
         .btn-danger { background: #dc3545; color: white; }
-        
-        /* Scanner UI */
         #reader { width: 100%; border-radius: 12px; background: #000; margin-top: 10px; overflow: hidden; }
         .result-box { background: #fff; padding: 15px; border-radius: 10px; margin-top: 10px; border: 2px solid #007bff; }
         #status { font-weight: bold; margin-bottom: 10px; padding: 12px; border-radius: 8px; text-align: center; font-size: 14px; }
-        
-        /* Table */
         .history-container { overflow-x: auto; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background: #f8f9fa; color: #666; }
-        tr:nth-child(even) { background: #fafafa; }
-        
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f8f9fa; }
         select { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
-        .hint { font-size: 11px; color: #666; margin-top: -5px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -44,34 +34,32 @@
         <h3>Scanner</h3>
         <button id="startBtn" class="btn-primary" onclick="initScanner()">Open Camera</button>
         <div id="reader"></div>
-        
         <div id="scanResult" style="display:none;" class="result-box">
-            <p style="margin:0; color:#666; font-size:12px;">STUDENT IDENTIFIED:</p>
-            <p style="font-size: 18px; font-weight: bold; margin: 5px 0;"> <span id="nameText"></span></p>
-            <p style="margin: 0 0 10px 0; color: #444;"> <span id="infoText"></span></p>
-            
-            <label style="font-size: 12px; font-weight: bold;">Select Violation:</label>
+            <p style="margin:0; color:#666; font-size:11px;">STUDENT IDENTIFIED:</p>
+            <p style="font-size: 16px; font-weight: bold; margin: 5px 0;"><span id="nameText"></span></p>
+            <p style="margin: 0 0 10px 0; font-size:13px; color: #444;"><span id="infoText"></span></p>
+            <label style="font-size: 12px; font-weight: bold;">Violation:</label>
             <select id="violationType">
-                <option value="Haircut">Improper Haircut</option>
+                <option value="Haircut">Proper Haircut</option>
                 <option value="Uniform">Incomplete Uniform</option>
                 <option value="ID">No ID Card</option>
-                <option value="Lateness">Tardiness</option>
-                <option value="Other">Other Violation</option>
+                <option value="Lateness">Lateness</option>
+                <option value="Other">Other</option>
             </select>
-            
             <button class="btn-success" onclick="saveRecord()">Confirm & Save</button>
             <button class="btn-secondary" onclick="cancelScan()">Wrong Student? Scan Again</button>
         </div>
     </div>
 
     <div class="card">
-        <h3>Recent Violations (Last 5)</h3>
+        <h3>Recent Violations</h3>
         <div class="history-container">
-            <table id="historyTable">
+            <table>
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Violation</th>
+                        <th>Sec</th>
+                        <th>Vio</th>
                         <th>Time</th>
                     </tr>
                 </thead>
@@ -81,128 +69,90 @@
     </div>
 
     <div class="card">
-        <h3>Data & Settings</h3>
+        <h3>Data Management</h3>
         <button class="btn-success" onclick="exportData()">Extract Report (Excel)</button>
-        <button class="btn-danger" onclick="clearLogs()">Clear Extraction Database</button>
-        
-        <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-            <p style="font-weight:bold; font-size: 13px; margin-bottom: 5px;">Roster Template Upload</p>
-            <p class="hint">Columns: LRN, Name, Grade, Section</p>
-            <input type="file" id="csvFile" accept=".csv">
-            <button class="btn-secondary" style="font-size: 12px;" onclick="uploadCSV()">Update Roster</button>
-            <button class="btn-danger" style="font-size: 12px; background: #a52834;" onclick="clearRoster()">Delete All Student Names</button>
-        </div>
+        <button class="btn-danger" onclick="clearLogs()">Reset Violations</button>
+        <hr>
+        <input type="file" id="csvFile" accept=".csv" style="font-size: 11px; margin-bottom: 10px;">
+        <button class="btn-secondary" onclick="uploadCSV()">Update Roster</button>
+        <button class="btn-danger" style="background: #a52834;" onclick="clearRoster()">Delete Roster</button>
     </div>
 
     <script>
-        // Initialize Database
-      const db = new Dexie("StudentTrackerDB");
+        const db = new Dexie("StudentTrackerDB");
         db.version(1).stores({
             students: "LRN, Name, Grade, Section",
             logs: "++id, LRN, Name, Grade, Section, violation, date"
         });
 
-        let scanner = null;
-        let activeStudent = null;
-
-        // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
         function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
+            osc.connect(gain); gain.connect(audioCtx.destination);
             if (type === 'success') {
-                // High pitch "ding"
-                osc.type = "sine";
                 osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.2);
-            } else if (type === 'error') {
-                // Lower "buzz-buzz"
-                osc.type = "sawtooth";
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else {
+                osc.type = "sawtooth"; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
             }
         }
 
-        // --- AUTO-LOAD ON START ---
-        document.addEventListener("DOMContentLoaded", () => {
-            refreshUI();
-        });
+        document.addEventListener("DOMContentLoaded", refreshUI);
 
         async function refreshUI() {
             const studentCount = await db.students.count();
             const logCount = await db.logs.count();
             const statusDiv = document.getElementById('status');
-            
-            if (studentCount > 0) {
-                statusDiv.innerText = `✅ READY: ${studentCount} Students | ${logCount} Records`;
-                statusDiv.style.background = "#d4edda";
-                statusDiv.style.color = "#155724";
-            } else {
-                statusDiv.innerText = `⚠️ NO ROSTER: Please upload student CSV`;
-                statusDiv.style.background = "#fff3cd";
-                statusDiv.style.color = "#856404";
-            }
+            statusDiv.innerText = studentCount > 0 ? `✅ READY: ${studentCount} Students | ${logCount} Logs` : `⚠️ NO ROSTER: Upload CSV`;
+            statusDiv.style.background = studentCount > 0 ? "#d4edda" : "#fff3cd";
 
             const lastLogs = await db.logs.reverse().limit(5).toArray();
-            const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = lastLogs.length > 0 
-                ? lastLogs.map(log => `<tr><td>${log.Name}</td><td>${log.violation}</td><td>${log.date.split(',')[1]}</td></tr>`).join('')
-                : '<tr><td colspan="3" style="text-align:center;">No violations recorded yet</td></tr>';
+            document.getElementById('historyBody').innerHTML = lastLogs.map(log => `
+                <tr>
+                    <td>${log.Name}</td>
+                    <td>${log.Section}</td>
+                    <td>${log.violation}</td>
+                    <td>${log.date.split(',')[1]}</td>
+                </tr>
+            `).join('');
         }
 
-        // --- CAMERA LOGIC ---
         function initScanner() {
-            // Resume AudioContext (required by mobile browsers)
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             document.getElementById('startBtn').style.display = 'none';
             scanner = new Html5Qrcode("reader");
-            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
-            .catch(err => alert("Camera Error. Ensure HTTPS is used."));
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess);
         }
 
         async function onScanSuccess(decodedText) {
             const student = await db.students.get(decodedText.trim());
             if (student) {
-                playSound('success'); // Play Happy Sound
+                playSound('success');
                 activeStudent = student;
                 document.getElementById('nameText').innerText = student.Name;
-                document.getElementById('infoText').innerText = `G${student.Grade} - ${student.Section}`;
+                document.getElementById('infoText').innerText = `Grade ${student.Grade} - Section ${student.Section}`;
                 document.getElementById('scanResult').style.display = 'block';
                 if(scanner) scanner.pause(true);
             } else {
-                playSound('error'); // Play Error Sound
-                alert("LRN: " + decodedText + " not found in roster.");
+                playSound('error');
+                alert("LRN Not Found!");
             }
         }
 
         function cancelScan() {
-            activeStudent = null;
             document.getElementById('scanResult').style.display = 'none';
             if(scanner) scanner.resume();
         }
 
-        // --- DATA ACTIONS ---
         async function saveRecord() {
             if(!activeStudent) return;
-            const vio = document.getElementById('violationType').value;
-            await db.logs.add({
-                ...activeStudent,
-                violation: vio,
-                date: new Date().toLocaleString()
-            });
-            playSound('success'); // Play Sound on Save too!
+            await db.logs.add({ ...activeStudent, violation: document.getElementById('violationType').value, date: new Date().toLocaleString() });
+            playSound('success');
             document.getElementById('scanResult').style.display = 'none';
             await refreshUI();
             if(scanner) scanner.resume();
@@ -210,44 +160,31 @@
 
         async function uploadCSV() {
             const file = document.getElementById('csvFile').files[0];
-            if (!file) return alert("Select a CSV file.");
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const rows = e.target.result.split("\n").slice(1);
                 const data = rows.map(r => {
-                    const cols = r.split(",");
-                    return cols.length >= 4 ? { LRN: cols[0].trim(), Name: cols[1].trim(), Grade: cols[2].trim(), Section: cols[3].trim() } : null;
+                    const c = r.split(",");
+                    return c.length >= 4 ? { LRN: c[0].trim(), Name: c[1].trim(), Grade: c[2].trim(), Section: c[3].trim() } : null;
                 }).filter(Boolean);
                 await db.students.bulkPut(data);
                 await refreshUI();
-                alert("Roster updated.");
             };
             reader.readAsText(file);
         }
 
         async function exportData() {
             const logs = await db.logs.toArray();
-            if (logs.length === 0) return alert("No records.");
+            if (logs.length === 0) return alert("No data");
             const ws = XLSX.utils.json_to_sheet(logs);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Violations Report");
-            XLSX.writeFile(wb, "Violation_Report.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "Report");
+            XLSX.writeFile(wb, "Student_Violations.xlsx");
         }
 
-        async function clearLogs() {
-            if (confirm("Reset export database?")) {
-                await db.logs.clear();
-                await refreshUI();
-            }
-        }
-
-        async function clearRoster() {
-            if (confirm("Delete all student names?")) {
-                await db.students.clear();
-                await refreshUI();
-            }
-        }
+        async function clearLogs() { if (confirm("Clear logs?")) { await db.logs.clear(); refreshUI(); } }
+        async function clearRoster() { if (confirm("Delete roster?")) { await db.students.clear(); refreshUI(); } }
     </script>
 </body>
 </html>
-
