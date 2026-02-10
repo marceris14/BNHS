@@ -137,7 +137,7 @@
                 activeStudent = student;
                 // CLEAN DISPLAY LOGIC:
                 document.getElementById('nameText').innerText = student.Name;
-                document.getElementById('infoText').innerText = `Grade ${student.Grade} — Section ${student.Section}`;
+                document.getElementById('infoText').innerText = `Grade ${student.Grade} — ${student.Section}`;
                 
                 document.getElementById('scanResult').style.display = 'block';
                 if(scanner) scanner.pause(true);
@@ -203,3 +203,4 @@
     </script>
 </body>
 </html>
+
