@@ -96,7 +96,7 @@
 
     <script>
         // Initialize Database
-        const db = new Dexie("StudentTrackerDB");
+      const db = new Dexie("StudentTrackerDB");
         db.version(1).stores({
             students: "LRN, Name, Grade, Section",
             logs: "++id, LRN, Name, Grade, Section, violation, date"
@@ -105,7 +105,35 @@
         let scanner = null;
         let activeStudent = null;
 
-        // Auto-run when page opens
+        // --- AUDIO ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'success') {
+                // High pitch "ding"
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'error') {
+                // Lower "buzz-buzz"
+                osc.type = "sawtooth";
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        // --- AUTO-LOAD ON START ---
         document.addEventListener("DOMContentLoaded", () => {
             refreshUI();
         });
@@ -115,9 +143,8 @@
             const logCount = await db.logs.count();
             const statusDiv = document.getElementById('status');
             
-            // Update Top Status Bar
             if (studentCount > 0) {
-                statusDiv.innerText = `✅ SYSTEM READY: ${studentCount} Students Loaded`;
+                statusDiv.innerText = `✅ READY: ${studentCount} Students | ${logCount} Records`;
                 statusDiv.style.background = "#d4edda";
                 statusDiv.style.color = "#155724";
             } else {
@@ -126,7 +153,6 @@
                 statusDiv.style.color = "#856404";
             }
 
-            // Update History Table
             const lastLogs = await db.logs.reverse().limit(5).toArray();
             const tbody = document.getElementById('historyBody');
             tbody.innerHTML = lastLogs.length > 0 
@@ -134,40 +160,40 @@
                 : '<tr><td colspan="3" style="text-align:center;">No violations recorded yet</td></tr>';
         }
 
-        // Camera Logic
+        // --- CAMERA LOGIC ---
         function initScanner() {
+            // Resume AudioContext (required by mobile browsers)
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             document.getElementById('startBtn').style.display = 'none';
             scanner = new Html5Qrcode("reader");
-            scanner.start(
-                { facingMode: "environment" }, 
-                { fps: 10, qrbox: 250 },
-                onScanSuccess
-            ).catch(err => {
-                alert("Camera error. Please ensure you are on HTTPS and allowed camera access.");
-                document.getElementById('startBtn').style.display = 'block';
-            });
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess)
+            .catch(err => alert("Camera Error. Ensure HTTPS is used."));
         }
 
         async function onScanSuccess(decodedText) {
             const student = await db.students.get(decodedText.trim());
             if (student) {
+                playSound('success'); // Play Happy Sound
                 activeStudent = student;
                 document.getElementById('nameText').innerText = student.Name;
                 document.getElementById('infoText').innerText = `G${student.Grade} - ${student.Section}`;
                 document.getElementById('scanResult').style.display = 'block';
                 if(scanner) scanner.pause(true);
             } else {
-                alert("LRN: " + decodedText + " not found in the uploaded roster.");
+                playSound('error'); // Play Error Sound
+                alert("LRN: " + decodedText + " not found in roster.");
             }
         }
 
-        // Action Buttons
         function cancelScan() {
             activeStudent = null;
             document.getElementById('scanResult').style.display = 'none';
             if(scanner) scanner.resume();
         }
 
+        // --- DATA ACTIONS ---
         async function saveRecord() {
             if(!activeStudent) return;
             const vio = document.getElementById('violationType').value;
@@ -176,15 +202,15 @@
                 violation: vio,
                 date: new Date().toLocaleString()
             });
+            playSound('success'); // Play Sound on Save too!
             document.getElementById('scanResult').style.display = 'none';
             await refreshUI();
             if(scanner) scanner.resume();
         }
 
-        // Data Management
         async function uploadCSV() {
             const file = document.getElementById('csvFile').files[0];
-            if (!file) return alert("Please select a CSV file first.");
+            if (!file) return alert("Select a CSV file.");
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const rows = e.target.result.split("\n").slice(1);
@@ -194,14 +220,14 @@
                 }).filter(Boolean);
                 await db.students.bulkPut(data);
                 await refreshUI();
-                alert("Roster updated successfully!");
+                alert("Roster updated.");
             };
             reader.readAsText(file);
         }
 
         async function exportData() {
             const logs = await db.logs.toArray();
-            if (logs.length === 0) return alert("Nothing to export yet.");
+            if (logs.length === 0) return alert("No records.");
             const ws = XLSX.utils.json_to_sheet(logs);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Violations Report");
@@ -209,14 +235,14 @@
         }
 
         async function clearLogs() {
-            if (confirm("Reset export data? All current violation logs will be deleted.")) {
+            if (confirm("Reset export database?")) {
                 await db.logs.clear();
                 await refreshUI();
             }
         }
 
         async function clearRoster() {
-            if (confirm("Delete the entire student roster? You will need to upload a new CSV.")) {
+            if (confirm("Delete all student names?")) {
                 await db.students.clear();
                 await refreshUI();
             }
@@ -224,3 +250,4 @@
     </script>
 </body>
 </html>
+
