@@ -41,11 +41,12 @@
             
             <label style="font-size: 12px; font-weight: bold;">Violation:</label>
             <select id="violationType">
-                <option value="Haircut">Improper Haircut</option>
-                <option value="Uniform">Incomplete Uniform</option>
-                <option value="ID">No ID Card</option>
-                <option value="Lateness">Tardiness</option>
-                <option value="Other">Other</option>
+                <option value="Improper Haircu">Improper Haircut</option>
+                <option value="Improper Uniform">Improper Uniform</option>
+                <option value="No ID">No ID Card</option>
+                <option value="Late">Tardiness</option>
+                <option value="Make Up">Excessive Make Up</option>
+                <option value="Others">Others</option>
             </select>
             <button class="btn-success" onclick="saveRecord()">Confirm & Save</button>
             <button class="btn-secondary" onclick="cancelScan()">Wrong Student? Scan Again</button>
@@ -59,7 +60,7 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Sec</th>
+                        <th>Section</th>
                         <th>Violation</th>
                         <th>Time</th>
                     </tr>
@@ -203,4 +204,5 @@
     </script>
 </body>
 </html>
+
 
