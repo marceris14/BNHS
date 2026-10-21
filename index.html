@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Tracker Pro</title>
+
+    <!-- PWA Manifest for Chrome Installation -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Student Tracker Pro","short_name":"StudentTracker","start_url":".","display":"standalone","background_color":"#f0f2f5","theme_color":"#007bff","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3429/3429149.png","sizes":"512x512","type":"image/png"}]}'>
+    <meta name="theme-color" content="#007bff">
+
     <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
@@ -16,6 +21,7 @@
         .btn-secondary { background: #6c757d; color: white; }
         .btn-success { background: #28a745; color: white; }
         .btn-danger { background: #dc3545; color: white; }
+        .btn-install { background: #6f42c1; color: white; display: none; }
         #reader { width: 100%; border-radius: 12px; background: #000; margin-top: 10px; overflow: hidden; }
         .result-box { background: #fff; padding: 15px; border-radius: 10px; margin-top: 10px; border: 2px solid #007bff; }
         #status { font-weight: bold; margin-bottom: 10px; padding: 12px; border-radius: 8px; text-align: center; font-size: 14px; }
@@ -30,6 +36,8 @@
 
     <div id="status">Checking Database...</div>
 
+    <button id="installBtn" class="btn-install" onclick="installPWA()">📱 Install App on Device</button>
+
     <div class="card">
         <h3>Scanner</h3>
         <button id="startBtn" class="btn-primary" onclick="initScanner()">Open Camera</button>
@@ -41,7 +49,7 @@
             
             <label style="font-size: 12px; font-weight: bold;">Violation:</label>
             <select id="violationType">
-                <option value="Improper Haircu">Improper Haircut</option>
+                <option value="Improper Haircut">Improper Haircut</option>
                 <option value="Improper Uniform">Improper Uniform</option>
                 <option value="No ID">No ID Card</option>
                 <option value="Late">Tardiness</option>
@@ -81,6 +89,11 @@
     </div>
 
     <script>
+        let scanner = null;
+        let activeStudent = null;
+        let isScannerActive = false;
+        let deferredPrompt = null;
+
         const db = new Dexie("StudentTrackerDB");
         db.version(1).stores({
             students: "LRN, Name, Grade, Section",
@@ -104,7 +117,27 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", refreshUI);
+        document.addEventListener("DOMContentLoaded", () => {
+            refreshUI();
+            registerServiceWorker();
+        });
+
+        // Handle page visibility to avoid camera freeze on screen close/minimize
+        document.addEventListener("visibilitychange", async () => {
+            if (document.hidden) {
+                if (scanner && isScannerActive) {
+                    try {
+                        await scanner.stop();
+                    } catch (e) {
+                        console.log("Scanner stopped while hiding:", e);
+                    }
+                }
+            } else {
+                if (isScannerActive) {
+                    restartScanner();
+                }
+            }
+        });
 
         async function refreshUI() {
             const studentCount = await db.students.count();
@@ -124,11 +157,42 @@
             `).join('');
         }
 
-        function initScanner() {
+        async function initScanner() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             document.getElementById('startBtn').style.display = 'none';
-            scanner = new Html5Qrcode("reader");
-            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess);
+            if (!scanner) {
+                scanner = new Html5Qrcode("reader");
+            }
+            try {
+                // qrbox is removed so the entire camera view is used without a framing box
+                await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScanSuccess);
+                isScannerActive = true;
+            } catch (err) {
+                console.error("Camera start failed:", err);
+                document.getElementById('startBtn').style.display = 'block';
+            }
+        }
+
+        async function restartScanner() {
+            if (scanner) {
+                try {
+                    await scanner.start({ facingMode: "environment" }, { fps: 10 }, onScanSuccess);
+                } catch (e) {
+                    console.log("Error restarting scanner:", e);
+                }
+            }
+        }
+
+        async function stopScanner() {
+            if (scanner && isScannerActive) {
+                try {
+                    await scanner.stop();
+                    isScannerActive = false;
+                } catch (e) {
+                    console.log("Error stopping scanner:", e);
+                }
+            }
+            document.getElementById('startBtn').style.display = 'block';
         }
 
         async function onScanSuccess(decodedText) {
@@ -136,12 +200,11 @@
             if (student) {
                 playSound('success');
                 activeStudent = student;
-                // CLEAN DISPLAY LOGIC:
                 document.getElementById('nameText').innerText = student.Name;
                 document.getElementById('infoText').innerText = `Grade ${student.Grade} — ${student.Section}`;
                 
                 document.getElementById('scanResult').style.display = 'block';
-                if(scanner) scanner.pause(true);
+                if (scanner) scanner.pause(true);
             } else {
                 playSound('error');
                 alert("LRN Not Found in Roster!");
@@ -150,11 +213,11 @@
 
         function cancelScan() {
             document.getElementById('scanResult').style.display = 'none';
-            if(scanner) scanner.resume();
+            if (scanner) scanner.resume();
         }
 
         async function saveRecord() {
-            if(!activeStudent) return;
+            if (!activeStudent) return;
             await db.logs.add({ 
                 ...activeStudent, 
                 violation: document.getElementById('violationType').value, 
@@ -163,7 +226,7 @@
             playSound('success');
             document.getElementById('scanResult').style.display = 'none';
             await refreshUI();
-            if(scanner) scanner.resume();
+            if (scanner) scanner.resume();
         }
 
         async function uploadCSV() {
@@ -174,7 +237,6 @@
                 const rows = e.target.result.split("\n").slice(1);
                 const data = rows.map(r => {
                     const c = r.split(",");
-                    // This ensures we only take the 4 columns we need
                     return c.length >= 4 ? { 
                         LRN: c[0].trim(), 
                         Name: c[1].trim(), 
@@ -201,8 +263,37 @@
 
         async function clearLogs() { if (confirm("Clear all logs?")) { await db.logs.clear(); refreshUI(); } }
         async function clearRoster() { if (confirm("Delete student roster?")) { await db.students.clear(); refreshUI(); } }
+
+        // PWA Install Prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('installBtn');
+            if (installBtn) installBtn.style.display = 'block';
+        });
+
+        async function installPWA() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                document.getElementById('installBtn').style.display = 'none';
+            }
+            deferredPrompt = null;
+        }
+
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swContent = `
+                    self.addEventListener('install', (e) => self.skipWaiting());
+                    self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
+                    self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request).catch(() => new Response('Offline'))));
+                `;
+                const blob = new Blob([swContent], { type: 'text/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(console.error);
+            }
+        }
     </script>
 </body>
 </html>
-
-
